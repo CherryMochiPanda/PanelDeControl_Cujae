@@ -4,13 +4,15 @@ Uso:
     python -m app.nbm.runner
     python -m app.nbm.runner --regenerate
     python -m app.nbm.runner --skip-autoencoder
+    python -m app.nbm.runner --fuente real
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import sys
-from pathlib import Path
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -18,7 +20,15 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 from app.database import SessionLocal
-from app.nbm import algorithms, config, data_generator, evaluator, persistence
+from app.nbm import (
+    algorithms,
+    anomaly_injector,
+    config,
+    data_generator,
+    evaluator,
+    extractors,
+    persistence,
+)
 
 
 def _preparar_xy(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, list[str]]:
@@ -80,24 +90,44 @@ def _imprimir_detalle(metricas: list[evaluator.Metricas]) -> None:
             for k, v in m.extra.items():
                 print(f"  {k}: {v:.6f}" if isinstance(v, float) else f"  {k}: {v}")
 
-async def main(regenerar: bool, skip_autoencoder: bool) -> int:
-    # 1. Dataset
+
+async def _cargar_dataset(fuente: str, regenerar: bool):
+    """Carga el dataset segun la fuente elegida.
+
+    Returns:
+        Tupla (df, fuente_nombre, seed, descripcion, hash_sha256).
+    """
+    if fuente == "real":
+        print("[1/5] Extrayendo features desde auditoria.security_logs...")
+        async with SessionLocal() as session:
+            df = await extractors.extraer_features_reales(session)
+        if df.empty:
+            print("[FATAL] No hay logs reales en auditoria.security_logs.")
+            print("        Usa --fuente sintetico o espera a tener logs.")
+            sys.exit(1)
+        df = anomaly_injector.inyectar_anomalias(df)
+        ruta = config.RESULTS_DIR / f"dataset_real_{datetime.now():%Y%m%d_%H%M%S}.csv"
+        df.to_csv(ruta, index=False)
+        h = hashlib.sha256(ruta.read_bytes()).hexdigest()
+        return df, "security_logs", config.SEED, "Extraido de security_logs + inyeccion", h
+
+    # Fuente sintetica
     if regenerar or not config.DATASET_CSV.exists():
         print(f"[1/5] Generando dataset sintetico ({config.N_REGISTROS} registros)...")
         df = data_generator.generar_dataset_sintetico()
         h = data_generator.guardar_dataset(df)
-        fuente = "sintetico"
-        seed = config.SEED
         descripcion = "Generado por app.nbm.data_generator"
     else:
         print(f"[1/5] Reutilizando dataset existente: {config.DATASET_CSV}")
         df = pd.read_csv(config.DATASET_CSV)
-        import hashlib
         h = hashlib.sha256(config.DATASET_CSV.read_bytes()).hexdigest()
-        fuente = "sintetico"
-        seed = config.SEED
         descripcion = "Cargado desde CSV"
+    return df, "sintetico", config.SEED, descripcion, h
 
+
+async def main(regenerar: bool, skip_autoencoder: bool, fuente: str) -> int:
+    # 1. Dataset
+    df, fuente_nombre, seed, descripcion, h = await _cargar_dataset(fuente, regenerar)
     print(f"      Registros: {len(df)} | Anomalias: {int(df['is_anomalous'].sum())}")
 
     # 2. Features
@@ -157,12 +187,12 @@ async def main(regenerar: bool, skip_autoencoder: bool) -> int:
     async with SessionLocal() as session:
         dataset_id = await persistence.registrar_dataset(
             session,
-            fuente=fuente,
+            fuente=fuente_nombre,
             n_registros=len(df),
             n_anomalias=int(df["is_anomalous"].sum()),
             n_features=len(features),
             hash_sha256=h,
-            ruta_csv=str(config.DATASET_CSV),
+            ruta_csv=str(config.DATASET_CSV) if fuente_nombre == "sintetico" else str(config.RESULTS_DIR),
             seed=seed,
             descripcion=descripcion,
         )
@@ -176,6 +206,7 @@ async def main(regenerar: bool, skip_autoencoder: bool) -> int:
 
     _imprimir_resumen(df_cmp, mejor)
     _imprimir_detalle(metricas)
+
     if errores:
         print("Advertencias:")
         for e in errores:
@@ -187,5 +218,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Experimento NBM: comparar algoritmos.")
     parser.add_argument("--regenerate", action="store_true", help="Fuerza regenerar dataset sintetico.")
     parser.add_argument("--skip-autoencoder", action="store_true", help="Omite el Autoencoder.")
+    parser.add_argument(
+        "--fuente",
+        choices=["sintetico", "real"],
+        default="sintetico",
+        help="Fuente de datos: sintetico (default) o real (security_logs).",
+    )
     args = parser.parse_args()
-    sys.exit(asyncio.run(main(args.regenerate, args.skip_autoencoder)))
+    sys.exit(asyncio.run(main(args.regenerate, args.skip_autoencoder, args.fuente)))
