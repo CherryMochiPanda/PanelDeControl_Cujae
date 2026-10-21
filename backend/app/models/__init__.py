@@ -25,3 +25,4 @@ from app.models.indicadores import (  # noqa: F401
     VariableIndicador,
 )
 from app.models.usuarios import ROLES_VALIDOS, Usuario  # noqa: F401
+from app.models.nbm import DatasetGenerado, Experimento  # noqa: F401

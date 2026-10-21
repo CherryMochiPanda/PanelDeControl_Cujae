@@ -27,7 +27,14 @@ class Settings(BaseSettings):
     LDAP_BASE_DN: str = ""
     ENV: str = "dev"
 
-    APP_VERSION: str = "0.1.0"
+    APP_VERSION: str = "0.1.0"  
 
 
 settings = Settings()  # type: ignore[call-arg]
+
+if __name__ == "__main__":
+    print("Candidatos .env encontrados:")
+    for p in _ENV_CANDIDATOS:
+        print(f"  - {p}")
+    print("\nURL SYNC que usa Pydantic:")
+    print(f"  {settings.DATABASE_URL_SYNC}")
