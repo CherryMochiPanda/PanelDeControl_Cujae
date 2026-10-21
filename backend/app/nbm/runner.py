@@ -56,16 +56,29 @@ async def _persistir(
 
 
 def _imprimir_resumen(df: pd.DataFrame, mejor: str) -> None:
-    print("\n" + "=" * 90)
-    print("COMPARATIVA DE ALGORITMOS - NBM CUJAE")
-    print("=" * 90)
+    print("\n" + "=" * 100)
+    print("TABLA GENERAL - COMPARATIVA DE ALGORITMOS - NBM CUJAE")
+    print("=" * 100)
     cols = ["algoritmo", "precision", "recall", "f1", "fpr",
             "tiempo_entrenamiento_s", "tiempo_prediccion_s"]
     print(df[cols].to_string(index=False))
-    print("-" * 90)
+    print("-" * 100)
     print(f"MEJOR ALGORITMO (F1): {mejor}")
-    print("=" * 90 + "\n")
+    print("=" * 100 + "\n")
 
+
+def _imprimir_detalle(metricas: list[evaluator.Metricas]) -> None:
+    """Imprime una tabla detallada por cada algoritmo (formato vertical)."""
+    for m in metricas:
+        print("\n" + "#" * 100)
+        print(f"# DETALLE POR ALGORITMO: {m.algoritmo}")
+        print("#" * 100)
+        tabla = evaluator.tabla_detallada(m)
+        print(tabla.to_string(index=False))
+        if m.extra:
+            print("\nExtra:")
+            for k, v in m.extra.items():
+                print(f"  {k}: {v:.6f}" if isinstance(v, float) else f"  {k}: {v}")
 
 async def main(regenerar: bool, skip_autoencoder: bool) -> int:
     # 1. Dataset
@@ -162,6 +175,7 @@ async def main(regenerar: bool, skip_autoencoder: bool) -> int:
     print(f"      Registrados en nbm.experimentos (dataset_id={dataset_id})")
 
     _imprimir_resumen(df_cmp, mejor)
+    _imprimir_detalle(metricas)
     if errores:
         print("Advertencias:")
         for e in errores:
