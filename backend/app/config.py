@@ -27,7 +27,8 @@ class Settings(BaseSettings):
     LDAP_BASE_DN: str = ""
     ENV: str = "dev"
 
-    APP_VERSION: str = "0.1.0"  
+    APP_VERSION: str = "0.1.0" 
+    NBM_ANONYMIZATION_PEPPER: str 
 
 
 settings = Settings()  # type: ignore[call-arg]

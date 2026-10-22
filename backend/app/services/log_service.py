@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.auditoria import Auditoria, SecurityLog
+from app.security.anonymizer import anonymize
 
 VERSION = "0.1.0"
 
@@ -45,8 +46,9 @@ async def write_security_log(
         ts=datetime.now(timezone.utc),
         event_type=event_type,
         severity=severity,
-        usuario=user or {},
-        session={"session_id": str(uuid.uuid4()), "ip_address": ip, "user_agent": user_agent},
+        usuario=user_seguro,  # antes: user or {}
+        #se gurda una bandera booleana en el log para saber si es externa o no
+        session={"session_id": str(uuid.uuid4()), "ip_hash": ip_segura, "user_agent": user_agent, "ip_externa": not ip.startswith("192.168.")},
         action={
             "resource_type": resource_type,
             "resource_id": resource_id,
