@@ -13,7 +13,7 @@ import asyncio
 import hashlib
 import sys
 from datetime import datetime
-
+from app.nbm import statistical_detector
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -147,7 +147,20 @@ async def main(regenerar: bool, skip_autoencoder: bool, fuente: str) -> int:
     resultados = []
     errores = []
 
+    # Identificar índices de las features numéricas en la matriz codificada.
+    # features es la lista de columnas tras one-hot encoding.
+    nombres_numericos = set(statistical_detector.FEATURES_NUMERICAS.keys())
+    idx_numericos = [i for i, f in enumerate(features) if f in nombres_numericos]
+    X_train_num = X_train_s[:, idx_numericos]
+    X_test_num = X_test_s[:, idx_numericos]
+    nombres_num = [features[i] for i in idx_numericos]
+
+    print(f"      DetectorZ usara {len(idx_numericos)} features numericas de {len(features)} totales")
+
     for nombre, fn in [
+        ("DetectorZ", lambda a, b, c: statistical_detector.ejecutar_detector_z(
+            X_train_num, y_train, X_test_num, feature_names=nombres_num
+        )),
         ("IsolationForest", algorithms.ejecutar_isolation_forest),
         ("OneClassSVM", algorithms.ejecutar_one_class_svm),
     ]:
