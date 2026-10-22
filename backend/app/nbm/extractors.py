@@ -70,20 +70,19 @@ async def extraer_features_reales(
         # Campos seudonimizados por write_security_log
         username_hash = str(usuario.get("username_hash", "desconocido"))
         rol = str(usuario.get("role", "desconocido"))
-        # ip_externa se calcula en write_security_log ANTES de hashear la IP
         ip_externa = int(sess.get("ip_externa", 0))
 
         resource = str(action.get("resource_type", ""))
         componente = RESOURCE_A_COMPONENTE.get(resource, "dashboard")
 
         filas.append({
-            "usuario": username_hash,       # identificador seudonimo consistente
+            "usuario": username_hash,
             "rol": rol,
-            "ip_origen": "",                # ya no se usa (se reemplaza por ip_externa)
+            "ip_origen": "",  # reemplazado por ip_externa
             "hora": hora,
             "dia_semana": dia,
             "componente": componente,
-            "ip_externa": ip_externa,       # <-- AQUI va el sess.get(...)
+            "ip_externa": ip_externa,
             "event_type": str(log.event_type or ""),
             "severity": log.severity,
             "es_horario_laboral": _hora_laboral(hora),
@@ -101,7 +100,7 @@ async def extraer_features_reales(
             errores_4xx=("severity", lambda s: int((s == "WARNING").sum())),
             accesos_rutas_sensibles=("componente", lambda s: int((s.isin(["api_auth", "api_modelos"])).sum())),
             usuarios_distintos_ip=("usuario", "nunique"),
-            ip_externa=("ip_externa", "max"),  # 1 si algun evento del grupo vino de fuera
+            ip_externa=("ip_externa", "max"),
             duracion_sesion_min=("ts", lambda s: (s.max() - s.min()).total_seconds() / 60 if len(s) > 1 else 0.0),
             bytes_transferidos_mb=("usuario", lambda s: 0.0),
         )

@@ -49,7 +49,7 @@ async def listar_security_logs(
     if severidad:
         stmt = stmt.where(SecurityLog.severity == severidad)
     if usuario:
-        stmt = stmt.where(SecurityLog.usuario["username"].as_string() == usuario)
+        stmt = stmt.where(SecurityLog.usuario["username_hash"].as_string() == usuario)
     if desde:
         stmt = stmt.where(SecurityLog.ts >= desde)
     if hasta:
@@ -113,7 +113,7 @@ async def exportar_logs(
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(
-        ["log_id", "ts", "event_type", "severity", "username", "ip", "recurso", "operacion"]
+        ["log_id", "ts", "event_type", "severity", "username_hash", "ip", "recurso", "operacion"]
     )
     for l in logs:
         writer.writerow(
@@ -122,7 +122,7 @@ async def exportar_logs(
                 l.ts.isoformat(),
                 l.event_type,
                 l.severity,
-                l.usuario.get("username", ""),
+                l.usuario.get("username_hash", ""),
                 l.session.get("ip_address", ""),
                 l.action.get("resource_type", ""),
                 l.action.get("operation", ""),

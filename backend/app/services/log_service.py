@@ -26,7 +26,11 @@ async def write_security_log(
     details: dict[str, Any] | None = None,
     commit: bool = True,
 ) -> None:
-    """Escribe un log estructurado JSON (esquema auditoria.security_logs).
+    """Escribe un log estructurado JSON con datos seudonimizados.
+
+    Aplica HMAC-SHA256 con pepper (NBM_ANONYMIZATION_PEPPER) a username e IP
+    antes de persistir en auditoria.security_logs. Preserva la correlacion
+    por usuario sin almacenar identificadores directos (ver Informe PP2 1.3.5).
 
     Args:
         session: sesion async.
@@ -41,14 +45,30 @@ async def write_security_log(
         details: detalles adicionales.
         commit: si True hace commit inmediato.
     """
+    # Seudonimizar identificadores sensibles antes de persistir
+    user_seguro: dict[str, Any] = {}
+    if user:
+        user_seguro = {
+            "user_id": str(user.get("user_id", "")),  # UUID ya es seudonimo interno
+            "username_hash": anonymize(user.get("username", "")),
+            "role": user.get("role", ""),
+            "auth_type": user.get("auth_type", ""),
+            # email no se persiste en logs (minimizacion)
+        }
+
     log = SecurityLog(
         log_id=uuid.uuid4(),
         ts=datetime.now(timezone.utc),
         event_type=event_type,
         severity=severity,
-        usuario=user_seguro,  # antes: user or {}
-        #se gurda una bandera booleana en el log para saber si es externa o no
-        session={"session_id": str(uuid.uuid4()), "ip_hash": ip_segura, "user_agent": user_agent, "ip_externa": not ip.startswith("192.168.")},
+        usuario=user_seguro,
+        session={
+            "session_id": str(uuid.uuid4()),
+            "ip_hash": anonymize(ip) if ip else "",
+            # Bandera calculada ANTES de hashear (necesaria para features del NBM)
+            "ip_externa": 0 if (ip or "").startswith("192.168.") else 1,
+            "user_agent": user_agent,
+        },
         action={
             "resource_type": resource_type,
             "resource_id": resource_id,
