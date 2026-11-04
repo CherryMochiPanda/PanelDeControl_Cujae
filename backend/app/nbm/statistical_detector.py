@@ -25,20 +25,35 @@ from app.nbm.algorithms import ResultadoAlgoritmo
 # se documentan como trabajo futuro.
 FEATURES_NUMERICAS = {
     # Temporal
-    "hora": "hora_del_dia",           # 0-23
-    "dia_semana": "dia_semana",       # 0-6
-    "es_horario_laboral": "es_fin_semana/laboral",  # binaria
+    "hora": "hora_del_dia",
+    "dia_semana": "dia_semana",
+    "es_horario_laboral": "es_fin_semana/laboral",
     # Usuario
     "duracion_sesion_min": "duracion_sesion",
     "num_peticiones_hora": "num_acciones",
     "accesos_rutas_sensibles": "recursos_accedidos",
     "intentos_fallidos": "intentos_fallidos",
     # Red
-    "ip_externa": "ip_externa",  # derivada de ip_origen
+    "ip_externa": "ip_externa",
     "usuarios_distintos_ip": "ip_diversidad",
     "errores_4xx": "error_rate_4xx",
     "errores_5xx": "error_rate_5xx",
     "bytes_transferidos_mb": "data_volume_mb",
+    # Categoricas one-hot (informativas para el detector)
+    "componente_api_auth": "componente_auth",
+    "componente_api_export": "componente_export",
+    "componente_api_indicadores": "componente_indicadores",
+    "componente_api_modelos": "componente_modelos",
+    "componente_dashboard": "componente_dashboard",
+    "rol_admin": "rol_admin",
+    "rol_auditor": "rol_auditor",
+    "rol_directivo": "rol_directivo",
+    "rol_estudiante": "rol_estudiante",
+    "rol_jefe_proceso": "rol_jefe_proceso",
+    "rol_profesor": "rol_profesor",
+    "protocolo_HTTPS": "protocolo_https",
+    "protocolo_LDAP": "protocolo_ldap",
+    "protocolo_SQL": "protocolo_sql",
 }
 
 UMBRAL_Z = 3.0  # |Z| > 3.0 -> anomalía (99.7% de la distribución normal)
@@ -46,41 +61,31 @@ UMBRAL_Z = 3.0  # |Z| > 3.0 -> anomalía (99.7% de la distribución normal)
 
 @dataclass
 class ModeloZ:
-    """Estadísticas del modelo (media y std por feature)."""
     medias: np.ndarray
     desviaciones: np.ndarray
+    umbrales: np.ndarray  # umbral por feature (percentil 99 de |Z| en train)
     feature_names: list[str]
-    umbral: float
+    umbral_global: float  # umbral global (percentil 99 del max |Z| por evento)
 
-
-def entrenar_detector_z(
-    X_train: np.ndarray,
-    y_train: np.ndarray,
-    *,
-    feature_names: list[str] | None = None,
-    umbral: float = UMBRAL_Z,
-) -> ModeloZ:
-    """Calcula media y desviación estándar de cada feature sobre datos normales."""
+def entrenar_detector_z(X_train, y_train, *, feature_names=None, percentil=99):
     X_normal = X_train[y_train == 0]
     medias = X_normal.mean(axis=0)
     desviaciones = X_normal.std(axis=0)
-    # Evitar división por cero: donde std=0, poner 1.0 (feature constante)
     desviaciones = np.where(desviaciones == 0, 1.0, desviaciones)
+    Z_normal = np.abs((X_normal - medias) / desviaciones)
+    # Umbral global: percentil 99 del max |Z| por evento normal
+    max_z_normal = Z_normal.max(axis=1)
+    umbral_global = float(np.percentile(max_z_normal, percentil))
     return ModeloZ(
-        medias=medias,
-        desviaciones=desviaciones,
+        medias=medias, desviaciones=desviaciones,
+        umbrales=np.full(medias.shape, umbral_global),
         feature_names=feature_names or [f"f{i}" for i in range(X_train.shape[1])],
-        umbral=umbral,
+        umbral_global=umbral_global,
     )
 
-
-def predecir_detector_z(modelo: ModeloZ, X_test: np.ndarray) -> np.ndarray:
-    """Predice anomalías calculando |Z| máximo por evento.
-
-    Un evento es anomalía si CUALQUIERA de sus features supera el umbral.
-    """
+def predecir_detector_z(modelo, X_test):
     Z = np.abs((X_test - modelo.medias) / modelo.desviaciones)
-    return (Z.max(axis=1) > modelo.umbral).astype(int)
+    return (Z.max(axis=1) > modelo.umbral_global).astype(int)
 
 
 def ejecutar_detector_z(X_train, y_train, X_test, feature_names=None) -> ResultadoAlgoritmo:

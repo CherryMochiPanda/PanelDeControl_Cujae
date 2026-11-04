@@ -11,13 +11,13 @@ COMPARATIVA_CSV = RESULTS_DIR / "comparativa_algoritmos.csv"
 
 # Dataset sintetico
 SEED = 42
-N_REGISTROS = 2000
-PROPORCION_ANOMALIAS = 0.05  # 5%
-TEST_SIZE = 0.30
+N_REGISTROS = 50000          # antes: 2000
+PROPORCION_ANOMALIAS = 0.01  # antes: 0.05 (1% es mas realista)
+TEST_SIZE = 0.20             # antes: 0.30 (20% = 10.000 eventos en test)
 
 # Isolation Forest
 IF_N_ESTIMATORS = 100
-IF_CONTAMINATION = PROPORCION_ANOMALIAS
+IF_CONTAMINATION = 0.02  # revertir a 0.02
 
 # One-Class SVM
 OCSVM_KERNEL = "rbf"
@@ -29,4 +29,4 @@ AE_EPOCHS = 50
 AE_BATCH_SIZE = 64
 AE_LR = 1e-3
 AE_HIDDEN = 8  # dimension del cuello de botella
-AE_UMBRAL_PERCENTIL = 95  # anomalia si error de reconstruccion > p95 del train normal
+AE_UMBRAL_PERCENTIL = 98  # antes: 95 (más conservador -> menos FP)

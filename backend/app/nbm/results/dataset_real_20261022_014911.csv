@@ -1,0 +1,2 @@
+usuario,rol,ip_origen,hora,dia_semana,componente,duracion_sesion_min,num_peticiones_hora,intentos_fallidos,errores_4xx,errores_5xx,bytes_transferidos_mb,accesos_rutas_sensibles,usuarios_distintos_ip,es_horario_laboral,protocolo,ip_externa,is_anomalous
+e4d2ad7d52ed8feb4b464aae250deeb1730d4ae93dcb0204507326f2f82d54fe,directivo,0,5,3,api_auth,0.0,224,40,0,0,0.0,0,1,0,HTTPS,0,1

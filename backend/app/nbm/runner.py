@@ -34,17 +34,18 @@ from app.nbm import (
 def _preparar_xy(df: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, list[str]]:
     """Convierte el DataFrame a matriz numerica X y vector y.
 
-    - One-hot encoding de columnas categoricas (usuario, rol, componente, protocolo).
-    - ip_origen se transforma en feature binaria 'ip_externa' (no empieza por 192.168.).
+    - Elimina 'usuario' (500 valores unicos -> one-hot explotaria la dimension).
+    - ip_origen se transforma en feature binaria 'ip_externa'.
+    - One-hot encoding de rol, componente y protocolo.
     - Se eliminan columnas no numericas tras el encoding.
     """
     df = df.copy()
     df["ip_externa"] = (~df["ip_origen"].astype(str).str.startswith("192.168.")).astype(int)
-    df = df.drop(columns=["ip_origen"])
+    df = df.drop(columns=["ip_origen", "usuario"])  # <-- quitamos usuario
     y = df["is_anomalous"].astype(int).to_numpy()
     X_df = df.drop(columns=["is_anomalous"])
     X_df = pd.get_dummies(
-        X_df, columns=["usuario", "rol", "componente", "protocolo"], drop_first=False,
+        X_df, columns=["rol", "componente", "protocolo"], drop_first=False,
     )
     features = X_df.columns.tolist()
     return X_df.to_numpy(dtype=np.float64), y, features
@@ -109,20 +110,40 @@ async def _cargar_dataset(fuente: str, regenerar: bool):
         ruta = config.RESULTS_DIR / f"dataset_real_{datetime.now():%Y%m%d_%H%M%S}.csv"
         df.to_csv(ruta, index=False)
         h = hashlib.sha256(ruta.read_bytes()).hexdigest()
-        return df, "security_logs", config.SEED, "Extraido de security_logs + inyeccion", h
-
-    # Fuente sintetica
-    if regenerar or not config.DATASET_CSV.exists():
-        print(f"[1/5] Generando dataset sintetico ({config.N_REGISTROS} registros)...")
-        df = data_generator.generar_dataset_sintetico()
-        h = data_generator.guardar_dataset(df)
-        descripcion = "Generado por app.nbm.data_generator"
+        fuente_nombre = "security_logs"
+        seed = config.SEED
+        descripcion = "Extraido de security_logs + inyeccion"
     else:
-        print(f"[1/5] Reutilizando dataset existente: {config.DATASET_CSV}")
-        df = pd.read_csv(config.DATASET_CSV)
-        h = hashlib.sha256(config.DATASET_CSV.read_bytes()).hexdigest()
-        descripcion = "Cargado desde CSV"
-    return df, "sintetico", config.SEED, descripcion, h
+        # Fuente sintetica
+        if regenerar or not config.DATASET_CSV.exists():
+            print(f"[1/5] Generando dataset sintetico ({config.N_REGISTROS} registros)...")
+            df = data_generator.generar_dataset_sintetico()
+            h = data_generator.guardar_dataset(df)
+            descripcion = "Generado por app.nbm.data_generator"
+        else:
+            print(f"[1/5] Reutilizando dataset existente: {config.DATASET_CSV}")
+            df = pd.read_csv(config.DATASET_CSV)
+            h = hashlib.sha256(config.DATASET_CSV.read_bytes()).hexdigest()
+            descripcion = "Cargado desde CSV"
+        fuente_nombre = "sintetico"
+        seed = config.SEED
+
+    # Validacion: train_test_split con stratify requiere >=2 clases y >=2 por clase.
+    # Con menos de 30 registros totales o menos de 2 anomalias, el split falla.
+    MIN_REGISTROS = 30
+    MIN_ANOMALIAS = 2
+    n_total = len(df)
+    n_anomalias = int(df["is_anomalous"].sum())
+    if n_total < MIN_REGISTROS:
+        print(f"[FATAL] Dataset insuficiente: {n_total} registros (minimo {MIN_REGISTROS}).")
+        print("        Espera a tener mas logs o usa --fuente sintetico.")
+        sys.exit(1)
+    if n_anomalias < MIN_ANOMALIAS:
+        print(f"[FATAL] Anomalias insuficientes: {n_anomalias} (minimo {MIN_ANOMALIAS}).")
+        print("        La inyeccion de anomalias necesita al menos 2 filas.")
+        sys.exit(1)
+
+    return df, fuente_nombre, seed, descripcion, h
 
 
 async def main(regenerar: bool, skip_autoencoder: bool, fuente: str) -> int:
@@ -159,7 +180,7 @@ async def main(regenerar: bool, skip_autoencoder: bool, fuente: str) -> int:
 
     for nombre, fn in [
         ("DetectorZ", lambda a, b, c: statistical_detector.ejecutar_detector_z(
-            X_train_num, y_train, X_test_num, feature_names=nombres_num
+    a, b, c, feature_names=features
         )),
         ("IsolationForest", algorithms.ejecutar_isolation_forest),
         ("OneClassSVM", algorithms.ejecutar_one_class_svm),
