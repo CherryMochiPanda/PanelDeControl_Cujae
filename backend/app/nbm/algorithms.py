@@ -90,25 +90,42 @@ def _medir_recursos(func, *args, **kwargs):
 
 
 def ejecutar_isolation_forest(X_train, y_train, X_test) -> ResultadoAlgoritmo:
-    """Entrena IF solo con datos normales y predice sobre test."""
+    """Entrena IF solo con datos normales y predice usando percentil del score.
+
+    En vez de 'contamination' fijo (que obliga a marcar el X% mas aislado),
+    se calcula el score de anomalia en los datos normales y se usa el percentil
+    IF_PERCENTIL como umbral. Esto es mas adaptativo y mejora el recall.
+    """
     X_train_normal = X_train[y_train == 0]
     params = {
         "n_estimators": config.IF_N_ESTIMATORS,
-        "contamination": config.IF_CONTAMINATION,
+        "contamination": "auto",
         "random_state": config.SEED,
     }
 
     model, t_fit, cpu_fit, ram_fit = _medir_recursos(
         lambda: IsolationForest(**params).fit(X_train_normal)
     )
-    raw, t_pred, cpu_pred, ram_pred = _medir_recursos(model.predict, X_test)
-    y_pred = np.where(raw == -1, 1, 0)
+
+    def _predecir():
+        scores_train = model.decision_function(X_train_normal)
+        umbral = float(np.percentile(scores_train, 100 - config.IF_PERCENTIL))
+        scores_test = model.decision_function(X_test)
+        return (scores_test < umbral).astype(int), umbral
+
+    (y_pred, umbral_score), t_pred, cpu_pred, ram_pred = _medir_recursos(_predecir)
 
     return ResultadoAlgoritmo(
-        nombre="IsolationForest", hiperparametros=params,
-        y_pred=y_pred, tiempo_entrenamiento_s=t_fit, tiempo_prediccion_s=t_pred,
-        cpu_entrenamiento_pct=cpu_fit, cpu_prediccion_pct=cpu_pred,
-        ram_entrenamiento_mb=ram_fit, ram_prediccion_mb=ram_pred,
+        nombre="IsolationForest",
+        hiperparametros={**params, "percentil": config.IF_PERCENTIL, "umbral_score": round(umbral_score, 6)},
+        y_pred=y_pred,
+        tiempo_entrenamiento_s=t_fit,
+        tiempo_prediccion_s=t_pred,
+        cpu_entrenamiento_pct=cpu_fit,
+        cpu_prediccion_pct=cpu_pred,
+        ram_entrenamiento_mb=ram_fit,
+        ram_prediccion_mb=ram_pred,
+        extra={"umbral_score": umbral_score},
     )
 
 

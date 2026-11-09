@@ -146,19 +146,28 @@ def _evento_normal(
 # Generacion de anomalias (6 tipos)
 # ---------------------------------------------------------------------------
 TIPOS_ANOMALIA = [
-    "fuerza_bruta", "escaneo", "exfiltracion",
-    "nocturno", "password_spray", "movimiento_lateral",
+    # Puntuales (cada una desvia 1-2 features a valores extremos)
+    "fuerza_bruta", "escaneo", "exfiltracion", "nocturno",
+    # Correlacionadas (cada feature en rango, pero la combinacion es anomala)
+    "movimiento_lateral", "exfiltracion_lenta", "password_spray",
 ]
 
 
 def _evento_anomalo(
     rng: np.random.Generator, usuario: str, info: dict, dia: int, hora: int
 ) -> dict:
-    """Genera un evento anomalo alterando las features de uno normal."""
+    """Genera un evento anomalo alterando las features de uno normal.
+
+    Tipos puntuales (faciles para Z-score): fuerza_bruta, escaneo,
+    exfiltracion, nocturno.
+    Tipos correlacionados (dificiles para Z-score, faciles para ML):
+    movimiento_lateral, exfiltracion_lenta, password_spray.
+    """
     tipo = str(rng.choice(TIPOS_ANOMALIA))
     base = _evento_normal(rng, usuario, info, dia, hora)
     base["is_anomalous"] = 1
 
+    # --- Puntuales: una o dos features a valores extremos ---
     if tipo == "fuerza_bruta":
         base.update(
             intentos_fallidos=int(rng.integers(10, 50)),
@@ -184,18 +193,37 @@ def _evento_anomalo(
             hora=int(rng.choice([0, 1, 2, 3, 4, 22, 23])),
             es_horario_laboral=0,
         )
-    elif tipo == "password_spray":
-        base.update(
-            usuarios_distintos_ip=int(rng.integers(5, 25)),
-            intentos_fallidos=int(rng.integers(10, 50)),
-            componente="api_auth",
-            ip_origen=_ip_externa(rng),
-        )
+
+    # --- Correlacionadas: cada feature en rango, combinacion anomala ---
     elif tipo == "movimiento_lateral":
+        # intentos fallidos moderados + accesos sensibles moderados + componente
+        # de modelos + hora nocturna. Cada feature por separado seria "raro pero
+        # no extremo"; la combinacion es lo que delata el ataque.
         base.update(
-            accesos_rutas_sensibles=int(rng.integers(10, 50)),
-            usuarios_distintos_ip=int(rng.integers(3, 10)),
+            intentos_fallidos=int(rng.integers(5, 10)),        # moderado
+            accesos_rutas_sensibles=int(rng.integers(10, 20)), # alto pero no extremo
             componente="api_modelos",
+            hora=int(rng.choice([1, 2, 3, 4])),
+            es_horario_laboral=0,
+        )
+    elif tipo == "exfiltracion_lenta":
+        # Volumen moderado + sesion muy larga + pocas peticiones. Ninguna feature
+        # es extrema, pero juntas describen una exfiltracion lenta (gota a gota).
+        base.update(
+            bytes_transferidos_mb=round(float(rng.uniform(40, 80)), 2),   # moderado
+            duracion_sesion_min=round(float(rng.uniform(180, 300)), 2),   # muy larga
+            num_peticiones_hora=int(rng.integers(5, 15)),                 # baja
+            componente="api_export",
+        )
+    elif tipo == "password_spray":
+        # Muchas IPs distintas + intentos moderados + horario laboral. No es
+        # "fuerza bruta" (intentos no son altos), pero el patron horizontal
+        # (muchas IPs, pocos intentos cada una) es tipico de password spraying.
+        base.update(
+            usuarios_distintos_ip=int(rng.integers(10, 20)),   # alto
+            intentos_fallidos=int(rng.integers(5, 15)),        # moderado
+            componente="api_auth",
+            hora=int(rng.integers(9, 18)),                     # laboral
             ip_origen=_ip_externa(rng),
         )
     return base

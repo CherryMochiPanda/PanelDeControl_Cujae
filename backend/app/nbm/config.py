@@ -17,7 +17,8 @@ TEST_SIZE = 0.20             # antes: 0.30 (20% = 10.000 eventos en test)
 
 # Isolation Forest
 IF_N_ESTIMATORS = 100
-IF_CONTAMINATION = 0.02  # revertir a 0.02
+IF_N_ESTIMATORS = 200       # antes: 100 (más árboles, scores más estables)
+IF_PERCENTIL = 99.5         # umbral: percentil 99.5 de los scores normales
 
 # One-Class SVM
 OCSVM_KERNEL = "rbf"
