@@ -12,7 +12,7 @@ import argparse
 import asyncio
 import hashlib
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from app.nbm import statistical_detector
 import numpy as np
 import pandas as pd
@@ -146,7 +146,7 @@ async def _cargar_dataset(fuente: str, regenerar: bool):
     return df, fuente_nombre, seed, descripcion, h
 
 
-async def main(regenerar: bool, skip_autoencoder: bool, fuente: str) -> int:
+async def main(regenerar: bool, skip_autoencoder: bool, fuente: str, save_model: bool = False) -> int:
     # 1. Dataset
     df, fuente_nombre, seed, descripcion, h = await _cargar_dataset(fuente, regenerar)
     print(f"      Registros: {len(df)} | Anomalias: {int(df['is_anomalous'].sum())}")
@@ -243,6 +243,35 @@ async def main(regenerar: bool, skip_autoencoder: bool, fuente: str) -> int:
     print(f"    (DetectorZ se excluye: es linea base estadistica, no ML no supervisado)")
     _imprimir_detalle(metricas)
 
+    if save_model:
+        from app.nbm import model_store
+        import joblib
+        # Encontrar el resultado de OC-SVM
+        ocsvm_result = next((r for r in resultados if r.nombre == "OneClassSVM"), None)
+        if ocsvm_result is not None and "model" in ocsvm_result.extra:
+            metadata = {
+                "algoritmo": "OneClassSVM",
+                "fecha_entrenamiento": datetime.now(timezone.utc).isoformat(),
+                "n_train": len(X_train),
+                "n_test": len(X_test),
+                "n_features": len(features),
+                "precision": float(df_cmp[df_cmp["algoritmo"] == "OneClassSVM"]["precision"].iloc[0]),
+                "recall": float(df_cmp[df_cmp["algoritmo"] == "OneClassSVM"]["recall"].iloc[0]),
+                "f1": float(df_cmp[df_cmp["algoritmo"] == "OneClassSVM"]["f1"].iloc[0]),
+                "fpr": float(df_cmp[df_cmp["algoritmo"] == "OneClassSVM"]["fpr"].iloc[0]),
+                "hiperparametros": ocsvm_result.hiperparametros,
+                "fuente": fuente_nombre,
+            }
+            model_store.save_model(
+                model=ocsvm_result.extra["model"],
+                scaler=scaler,
+                features=features,
+                metadata=metadata,
+            )
+            print(f"\n>>> Modelo OC-SVM guardado en {model_store.config.MODEL_PATH}")
+        else:
+            print("\n[WARN] No se pudo guardar el modelo (falta el modelo en extra).")
+
     if errores:
         print("Advertencias:")
         for e in errores:
@@ -260,5 +289,9 @@ if __name__ == "__main__":
         default="sintetico",
         help="Fuente de datos: sintetico (default) o real (security_logs).",
     )
+    parser.add_argument(
+        "--save-model", action="store_true",
+        help="Guarda el modelo OC-SVM tras entrenar (para usar en /nbm/detectar).",
+    )
     args = parser.parse_args()
-    sys.exit(asyncio.run(main(args.regenerate, args.skip_autoencoder, args.fuente)))
+    sys.exit(asyncio.run(main(args.regenerate, args.skip_autoencoder, args.fuente, args.save_model)))

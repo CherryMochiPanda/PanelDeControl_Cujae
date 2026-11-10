@@ -25,7 +25,7 @@ _ESTADO_ACTUAL: str | None = None
 
 CLAVE_INTERVALO = "intervalo_recalculo_horas"
 CLAVE_HORA = "hora_recalculo"
-
+CLAVE_NBM_HORA = "nbm_reentrenamiento_hora"  # opcional, "03:00" por defecto
 
 async def job_recalculo() -> None:
     """Ejecuta el recalc programado; loguea resultado y errores."""
@@ -87,6 +87,33 @@ def programar(*, intervalo_horas: int | None = None, hora: str | None = None) ->
     _ESTADO_ACTUAL = estado
     log.info("Recalculo programado: %s", estado)
 
+
+
+
+async def job_reentrenar_nbm() -> None:
+    """Job semanal: reentrena el modelo OC-SVM del NBM."""
+    from app.nbm import training
+    try:
+        metricas = await training.entrenar_y_guardar_oneclasssvm(fuente="sintetico")
+        log.info("NBM reentrenado: %s", metricas)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Reentrenamiento NBM fallo: %s", exc)
+
+
+def programar_nbm(*, dia_semana: str = "mon", hora: str = "03:00") -> None:
+    """Programa el reentrenamiento semanal del NBM (default: lunes 03:00).
+
+    Args:
+        dia_semana: 'mon', 'tue', ..., 'sun'.
+        hora: 'HH:MM' en zona horaria institucional.
+    """
+    hh, mm = hora.split(":")
+    trigger = CronTrigger(day_of_week=dia_semana, hour=int(hh), minute=int(mm))
+    scheduler.add_job(
+        job_reentrenar_nbm, trigger,
+        id="nbm_retrain_weekly", replace_existing=True,
+    )
+    log.info("NBM reentrenamiento programado: %s %s", dia_semana, hora)
 
 async def programar_desde_config(session: AsyncSession) -> None:
     """(Re)programa el job leyendo las claves de configuracion de la BD.

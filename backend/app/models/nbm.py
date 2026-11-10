@@ -73,3 +73,29 @@ class DatasetGenerado(Base):
     ruta_csv: Mapped[str | None] = mapped_column(Text)
     seed: Mapped[int | None] = mapped_column(Integer)
     descripcion: Mapped[str | None] = mapped_column(Text)
+
+class Alerta(Base):
+    """Alerta generada por el detector (persistida para reportes)."""
+
+    __tablename__ = "alertas"
+    __table_args__ = (
+        Index("idx_nbm_alertas_fecha", "fecha"),
+        Index("idx_nbm_alertas_severidad", "severidad"),
+        Index("idx_nbm_alertas_estado", "estado"),
+        {"schema": "nbm"},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    fecha: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    usuario_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    componente: Mapped[str] = mapped_column(String(50), nullable=False)
+    score: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
+    severidad: Mapped[str] = mapped_column(String(20), nullable=False)
+    tipo_anomalia: Mapped[str] = mapped_column(String(50), nullable=False)
+    estado: Mapped[str] = mapped_column(String(20), nullable=False, default="nueva")
+    detalles: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    dataset_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))

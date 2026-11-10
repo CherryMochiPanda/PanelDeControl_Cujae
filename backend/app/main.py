@@ -16,14 +16,16 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Arranca el scheduler de recalculo diario y lo detiene al apagar.
+    """Arranca schedulers (recalculo diario + NBM semanal) y los detiene al apagar.
 
     Args:
         _app: instancia FastAPI.
     """
     from app.services import scheduler
-    from app.services.scheduler import programar
+    from app.services.scheduler import programar, programar_nbm
 
+    # 1. Programar recalculo de indicadores leyendo la config de la BD.
+    #    Si falla (BD no disponible), cae al horario por defecto 02:00.
     try:
         from app.database import SessionLocal
         from app.services.scheduler import programar_desde_config
@@ -33,6 +35,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:  # noqa: BLE001 - BD no disponible al arrancar
         logging.getLogger("main").warning("No se pudo leer config inicial: %s", exc)
         programar(hora="02:00")
+
+    # 2. Programar reentrenamiento semanal del NBM (independiente del paso 1).
+    programar_nbm()
+
     scheduler.iniciar()
     yield
     scheduler.detener(wait=False)

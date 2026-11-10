@@ -128,10 +128,11 @@ def ejecutar_one_class_svm(X_train, y_train, X_test) -> ResultadoAlgoritmo:
     y_pred = np.where(raw == -1, 1, 0)
 
     return ResultadoAlgoritmo(
-        nombre="OneClassSVM", hiperparametros=params,
-        y_pred=y_pred, tiempo_entrenamiento_s=t_fit, tiempo_prediccion_s=t_pred,
-        cpu_entrenamiento_pct=cpu_fit, cpu_prediccion_pct=cpu_pred,
-        ram_entrenamiento_mb=ram_fit, ram_prediccion_mb=ram_pred,
+    nombre="OneClassSVM", hiperparametros=params,
+    y_pred=y_pred, tiempo_entrenamiento_s=t_fit, tiempo_prediccion_s=t_pred,
+    cpu_entrenamiento_pct=cpu_fit, cpu_prediccion_pct=cpu_pred,
+    ram_entrenamiento_mb=ram_fit, ram_prediccion_mb=ram_pred,
+    extra={"model": model},  # <-- añadir el modelo entrenado
     )
 
 
