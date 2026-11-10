@@ -206,9 +206,15 @@ async def main(regenerar: bool, skip_autoencoder: bool, fuente: str) -> int:
 
     # 4. Evaluacion
     print("[4/5] Evaluando y comparando...")
+
     metricas = [evaluator.evaluar(r, y_test) for r in resultados]
     df_cmp = evaluator.comparar(metricas)
     mejor = evaluator.seleccionar_mejor(df_cmp)
+
+    # Separar DetectorZ (linea base estadistica) de los algoritmos de ML
+    metricas_ml = [m for m in metricas if m.algoritmo != "DetectorZ"]
+    df_cmp_ml = evaluator.comparar(metricas_ml)
+    mejor_ml = evaluator.seleccionar_mejor(df_cmp_ml)
 
     # 5. Persistencia
     print("[5/5] Persistiendo en PostgreSQL (schema nbm)...")
@@ -233,6 +239,8 @@ async def main(regenerar: bool, skip_autoencoder: bool, fuente: str) -> int:
     print(f"      Registrados en nbm.experimentos (dataset_id={dataset_id})")
 
     _imprimir_resumen(df_cmp, mejor)
+    print(f"\n>>> MODELO SELECCIONADO (solo ML): {mejor_ml}")
+    print(f"    (DetectorZ se excluye: es linea base estadistica, no ML no supervisado)")
     _imprimir_detalle(metricas)
 
     if errores:

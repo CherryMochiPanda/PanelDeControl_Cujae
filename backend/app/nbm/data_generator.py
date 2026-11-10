@@ -146,10 +146,14 @@ def _evento_normal(
 # Generacion de anomalias (6 tipos)
 # ---------------------------------------------------------------------------
 TIPOS_ANOMALIA = [
-    # Puntuales (cada una desvia 1-2 features a valores extremos)
-    "fuerza_bruta", "escaneo", "exfiltracion", "nocturno",
-    # Correlacionadas (cada feature en rango, pero la combinacion es anomala)
+    # Puntuales (40% del total)
+    "fuerza_bruta", "escaneo", "nocturno", "exfiltracion",
+    # Correlacionadas (60% del total)
     "movimiento_lateral", "exfiltracion_lenta", "password_spray",
+]
+TIPOS_PESOS = [
+    0.10, 0.10, 0.10, 0.10,   # puntuales = 0.40
+    0.20, 0.20, 0.20,         # correlacionadas = 0.60
 ]
 
 
@@ -163,7 +167,7 @@ def _evento_anomalo(
     Tipos correlacionados (dificiles para Z-score, faciles para ML):
     movimiento_lateral, exfiltracion_lenta, password_spray.
     """
-    tipo = str(rng.choice(TIPOS_ANOMALIA))
+    tipo = str(rng.choice(TIPOS_ANOMALIA, p=TIPOS_PESOS))
     base = _evento_normal(rng, usuario, info, dia, hora)
     base["is_anomalous"] = 1
 

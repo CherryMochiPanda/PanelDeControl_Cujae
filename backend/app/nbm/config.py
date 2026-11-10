@@ -9,25 +9,28 @@ RESULTS_DIR.mkdir(exist_ok=True)
 DATASET_CSV = RESULTS_DIR / "dataset_sintetico.csv"
 COMPARATIVA_CSV = RESULTS_DIR / "comparativa_algoritmos.csv"
 
+# Directorio de modelos entrenados
+MODEL_DIR = BASE_DIR / "models"
+MODEL_DIR.mkdir(exist_ok=True)
+MODEL_PATH = MODEL_DIR / "oneclasssvm_v1.joblib"
 # Dataset sintetico
 SEED = 42
 N_REGISTROS = 50000          # antes: 2000
 PROPORCION_ANOMALIAS = 0.01  # antes: 0.05 (1% es mas realista)
 TEST_SIZE = 0.20             # antes: 0.30 (20% = 10.000 eventos en test)
 
-# Isolation Forest
+# Isolation Forest (mejor de grid search)
 IF_N_ESTIMATORS = 100
-IF_N_ESTIMATORS = 200       # antes: 100 (más árboles, scores más estables)
-IF_PERCENTIL = 99.5         # umbral: percentil 99.5 de los scores normales
+IF_CONTAMINATION = 0.01
 
-# One-Class SVM
+# OneClassSVM (mejor de grid search)
 OCSVM_KERNEL = "rbf"
-OCSVM_GAMMA = "scale"
-OCSVM_NU = PROPORCION_ANOMALIAS
+OCSVM_GAMMA = "auto"
+OCSVM_NU = 0.005
 
-# Autoencoder
-AE_EPOCHS = 50
-AE_BATCH_SIZE = 64
+# Autoencoder (mejor de grid search)
+AE_EPOCHS = 80              # 120 da F1=0.7328 pero tarda 362s; 80 da F1=0.7273 y tarda 249s
+AE_BATCH_SIZE = 128
 AE_LR = 1e-3
-AE_HIDDEN = 8  # dimension del cuello de botella
-AE_UMBRAL_PERCENTIL = 98  # antes: 95 (más conservador -> menos FP)
+AE_HIDDEN = 8
+AE_UMBRAL_PERCENTIL = 99
